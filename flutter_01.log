@@ -1,0 +1,111 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter emulators
+
+## exception
+
+ProcessException: ProcessException: %1 is not a valid Win32 application.
+
+  Command: C:\Android\Sdk\emulator\emulator.exe -list-avds
+
+```
+#0      _ProcessImpl._start (dart:io-patch/process_patch.dart:421:33)
+#1      Process.start (dart:io-patch/process_patch.dart:42:20)
+#2      _runNonInteractiveProcess (dart:io-patch/process_patch.dart:625:18)
+#3      Process.run (dart:io-patch/process_patch.dart:56:12)
+#4      LocalProcessManager.run (package:process/src/interface/local_process_manager.dart:72:22)
+#5      ErrorHandlingProcessManager.run.<anonymous closure> (package:flutter_tools/src/base/error_handling_io.dart:628:26)
+#6      _run (package:flutter_tools/src/base/error_handling_io.dart:514:20)
+#7      ErrorHandlingProcessManager.run (package:flutter_tools/src/base/error_handling_io.dart:626:12)
+#8      _DefaultProcessUtils.run (package:flutter_tools/src/base/process.dart:334:59)
+#9      AndroidEmulators._getEmulatorAvds (package:flutter_tools/src/android/android_emulator.dart:61:56)
+#10     AndroidEmulators.emulators (package:flutter_tools/src/android/android_emulator.dart:52:43)
+#11     EmulatorManager.getAllAvailableEmulators.<anonymous closure> (package:flutter_tools/src/emulator.dart:90:41)
+#12     Future.forEach.<anonymous closure> (dart:async/future.dart:653:26)
+#13     Future.doWhile.<anonymous closure> (dart:async/future.dart:710:26)
+#14     _rootRunUnary (dart:async/zone.dart:1538:47)
+#15     _CustomZone.runUnary (dart:async/zone.dart:1429:19)
+#16     _CustomZone.runUnaryGuarded (dart:async/zone.dart:1329:7)
+#17     _CustomZone.bindUnaryCallbackGuarded.<anonymous closure> (dart:async/zone.dart:1367:26)
+#18     Future.doWhile (dart:async/future.dart:727:18)
+#19     Future.forEach (dart:async/future.dart:651:12)
+#20     EmulatorManager.getAllAvailableEmulators (package:flutter_tools/src/emulator.dart:87:18)
+#21     EmulatorsCommand._listEmulators (package:flutter_tools/src/commands/emulators.dart:99:34)
+#22     EmulatorsCommand.runCommand (package:flutter_tools/src/commands/emulators.dart:64:13)
+#23     FlutterCommand.verifyThenRunCommand (package:flutter_tools/src/runner/flutter_command.dart:1904:12)
+<asynchronous suspension>
+#24     FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1581:27)
+<asynchronous suspension>
+#25     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#26     CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+<asynchronous suspension>
+#27     FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:503:9)
+<asynchronous suspension>
+#28     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#29     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:438:5)
+<asynchronous suspension>
+#30     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:98:11)
+<asynchronous suspension>
+#31     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#32     main (package:flutter_tools/executable.dart:101:3)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.35.4, on Microsoft Windows [Version 10.0.19045.6466], locale en-US) [947ms]
+    [32m•[39m Flutter version 3.35.4 on channel stable at C:\flutter\src\flutter
+    [32m•[39m Upstream repository https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision d693b4b9db (3 months ago), 2025-09-16 14:27:41 +0000
+    [32m•[39m Engine revision c298091351
+    [32m•[39m Dart version 3.9.2
+    [32m•[39m DevTools version 2.48.0
+    [32m•[39m Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop, enable-windows-desktop, enable-android, enable-ios, cli-animations, enable-lldb-debugging
+
+[32m[✓][39m Windows Version (10 Pro 64-bit, 22H2, 2009) [4.1s]
+
+[32m[✓][39m Android toolchain - develop for Android devices (Android SDK version 36.1.0) [15.0s]
+    [32m•[39m Android SDK at C:\Android\Sdk
+    [32m•[39m Emulator version unknown
+    [32m•[39m Platform android-36, build-tools 36.1.0
+    [32m•[39m ANDROID_HOME = C:\Android\sdk
+    [32m•[39m ANDROID_SDK_ROOT =  C:\Android\Sdk
+    [32m•[39m Java binary at: C:\Program Files\Android\Android Studio\jbr\bin\java
+      This is the JDK bundled with the latest Android Studio installation on this machine.
+      To manually set the JDK path, use: `flutter config --jdk-dir="path/to/jdk"`.
+    [32m•[39m Java version OpenJDK Runtime Environment (build 21.0.7+-13880790-b1038.58)
+    [32m•[39m All Android licenses accepted.
+
+[32m[✓][39m Chrome - develop for the web [39ms]
+    [32m•[39m Chrome at C:\Program Files\Google\Chrome\Application\chrome.exe
+
+[31m[✗][39m Visual Studio - develop Windows apps [35ms]
+    [31m✗[39m Visual Studio not installed; this is necessary to develop Windows apps.
+      Download at https://visualstudio.microsoft.com/downloads/.
+      Please install the "Desktop development with C++" workload, including all of its default components
+
+[32m[✓][39m Android Studio (version 2025.1.3) [27ms]
+    [32m•[39m Android Studio at C:\Program Files\Android\Android Studio
+    [32m•[39m Flutter plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/9212-flutter
+    [32m•[39m Dart plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/6351-dart
+    [32m•[39m Java version OpenJDK Runtime Environment (build 21.0.7+-13880790-b1038.58)
+
+[32m[✓][39m Connected device (3 available) [895ms]
+    [32m•[39m Windows (desktop) • windows • windows-x64    • Microsoft Windows [Version 10.0.19045.6466]
+    [32m•[39m Chrome (web)      • chrome  • web-javascript • Google Chrome 143.0.7499.169
+    [32m•[39m Edge (web)        • edge    • web-javascript • Microsoft Edge 143.0.3650.96
+
+[32m[✓][39m Network resources [5.6s]
+    [32m•[39m All expected network resources are available.
+
+[33m![39m Doctor found issues in 1 category.
+```
