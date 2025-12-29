@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<string name="app_name">IndustryProapp</string>
+    <string name="facebook_app_id">1401356444708531</string>
+    <string name="fb_login_protocol_scheme">fb1401356444708531</string>
+    <string name="facebook_client_token">f8f1fa36c957df8497dc694956238e46</string>
+</resources>
