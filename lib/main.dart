@@ -1,45 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 import 'package:provider/provider.dart';
-
-// Imports (Inhe apne folder structure ke mutabiq check kar lein)
-import 'firebase_options.dart';
-import 'features/auth/login/login_screen.dart'; // New code wala login
-import 'features/layout/main_layout.dart';             // Old code wala layout
-import 'core/theme/theme_provider.dart';      // Theme logic
+import 'features/auth/login/login_screen.dart'; 
+import 'core/theme/theme_provider.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Firebase Initialize karna zaroori hai backend ke liye
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+  // Supabase Initialize with Redirect URL
+  await Supabase.initialize(
+    url: 'https://atjzalcufttndzjyjigp.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0anphbGN1ZnR0bmR6anlqaWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NTM4MDEsImV4cCI6MjA3NzIyOTgwMX0.a426Q3RwaHxrtUsbCH-5bwDA9yKn-0SGD6ScznXZkO8',
+    
   );
   
   runApp(
-    // Provider ko yahan wrap kiya taake puri app ko theme mile
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),
       child: const IndustryProApp(),
     ),
   );
 }
-
 class IndustryProApp extends StatelessWidget {
   const IndustryProApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Consumer theme changes ko listen karega
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Industry Pro',
-  
           theme: themeProvider.currentTheme, 
-          
-         
           home: const LoginScreen(), 
         );
       },

@@ -24,20 +24,15 @@ class _SignupView extends StatefulWidget {
 }
 
 class _SignupViewState extends State<_SignupView> {
+  // ERROR FIX: Added Name Controller
+  final _name = TextEditingController(); 
   final _emp = TextEditingController();
   final _pass = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // FIXED LAG: This pre-loads the images so Light/Dark switch is instant
-    precacheImage(const AssetImage('assets/images/operativexL.jpg'), context);
-    precacheImage(const AssetImage('assets/images/operativexD.jpeg'), context);
-  }
-
-  @override
   void dispose() {
+    _name.dispose(); 
     _emp.dispose();
     _pass.dispose();
     super.dispose();
@@ -57,11 +52,7 @@ class _SignupViewState extends State<_SignupView> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              bgImage, 
-              fit: BoxFit.cover, 
-              gaplessPlayback: true
-            ),
+            child: Image.asset(bgImage, fit: BoxFit.cover, gaplessPlayback: true),
           ),
           SafeArea(
             child: Center(
@@ -102,32 +93,31 @@ class _SignupViewState extends State<_SignupView> {
                   child: Icon(Icons.person_add_alt_1, color: Colors.white, size: 26),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  "Create Account", 
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
-                ),
+                const Text("Create Account", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
                 
+                _inputLabel("Full Name"),
+                _inputField(controller: _name, hint: "Enter your name", icon: Icons.person_outline),
+                const SizedBox(height: 15),
+
                 _inputLabel("Employee Code"),
                 _inputField(controller: _emp, hint: "Enter code", icon: Icons.badge_outlined),
                 const SizedBox(height: 15),
+                
                 _inputLabel("Password"),
                 _inputField(controller: _pass, hint: "Min 6 chars", icon: Icons.lock_outline, isPassword: true),
                 
                 const SizedBox(height: 25),
-                
                 _buildActionButton(controller),
-                
+
+                // --- SOCIAL LOGIN BUTTONS (AB YAHAN HAI!) ---
                 const SizedBox(height: 20),
                 const Text("Or continue with", style: TextStyle(color: Colors.white60, fontSize: 12)),
                 const SizedBox(height: 15),
-
-                // FIXED SOCIAL BUTTONS: Removed "Icons.替"
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _socialButton(
-                      // Placeholder icon if image not found
                       icon: Icons.g_mobiledata, 
                       onTap: () => controller.signInWithGoogle()
                     ),
@@ -137,14 +127,12 @@ class _SignupViewState extends State<_SignupView> {
                     ),
                   ],
                 ),
+                // ------------------------------------------
                 
                 const SizedBox(height: 20),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: const Text(
-                    "Already have an account? Login", 
-                    style: TextStyle(color: Colors.white, fontSize: 13)
-                  ),
+                  child: const Text("Already have an account? Login", style: TextStyle(color: Colors.white, fontSize: 13)),
                 ),
               ],
             ),
@@ -178,7 +166,6 @@ class _SignupViewState extends State<_SignupView> {
     );
   }
 
-  // FIXED: Using IconData instead of path to avoid errors
   Widget _socialButton({required IconData icon, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
@@ -196,10 +183,7 @@ class _SignupViewState extends State<_SignupView> {
   }
 
   Widget _inputLabel(String label) {
-    return Align(
-      alignment: Alignment.centerLeft, 
-      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13))
-    );
+    return Align(alignment: Alignment.centerLeft, child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)));
   }
 
   Widget _inputField({required TextEditingController controller, required String hint, required IconData icon, bool isPassword = false}) {
@@ -210,6 +194,7 @@ class _SignupViewState extends State<_SignupView> {
         controller: controller,
         obscureText: isPassword,
         style: const TextStyle(color: Colors.white, fontSize: 14),
+        validator: (v) => v == null || v.isEmpty ? "Required" : null,
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: Colors.white70, size: 18),
           hintText: hint,
@@ -224,10 +209,21 @@ class _SignupViewState extends State<_SignupView> {
   void _handleSignup(SignupController controller) async {
     if (_formKey.currentState!.validate()) {
       final success = await controller.signup(
+        name: _name.text.trim(), // Fixed the red line error
         employeeCode: _emp.text.trim(),
         password: _pass.text.trim(),
       );
-      if (success && mounted) Navigator.pop(context);
+      
+      if (success && mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Signup Successful!")),
+        );
+      } else if (controller.error != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(controller.error!)),
+        );
+      }
     }
-  }
+  } 
 }
