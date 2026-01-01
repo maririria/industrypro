@@ -1,55 +1,55 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginController extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   bool loading = false;
   String? error;
+  
+  // Role based navigation ke liye variables
+  String? userRole; // Main role (e.g., admin, worker)
+  List<dynamic>? userRoles; // Specific departments (e.g., ['printing', 'pasting'])
 
-  Future<bool> login({
-    required String employeeCode,
-    required String password,
-  }) async {
+  Future<bool> login({required String employeeCode, required String password}) async {
     loading = true;
     error = null;
     notifyListeners();
 
     try {
+      // Email formatting (Aapki original logic)
       String email = employeeCode.trim();
-
-      // Logic: If user provides only a code, append the domain. 
-      // If they provide a full email (like gmail), use it as is.
       if (!email.contains('@')) {
         email = "$email@operativex.com";
       }
 
-      await _auth.signInWithEmailAndPassword(
+      // 1. Supabase Auth se Login
+      final AuthResponse res = await _supabase.auth.signInWithPassword(
         email: email,
         password: password.trim(),
       );
 
-      loading = false;
-      notifyListeners();
-      return true;
-    } on FirebaseAuthException catch (e) {
-      // Professional English Error Handling
-      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-        error = "Invalid employee code or password.";
-      } else if (e.code == 'wrong-password') {
-        error = "The password you entered is incorrect.";
-      } else if (e.code == 'invalid-email') {
-        error = "The email or employee code format is invalid.";
-      } else if (e.code == 'user-disabled') {
-        error = "This account has been disabled. Please contact admin.";
-      } else if (e.code == 'too-many-requests') {
-        // This handles the "Unusual Activity" / Blocking error
-        error = "Too many failed attempts. This device is temporarily blocked. Please try again later.";
-      } else {
-        error = e.message ?? "An unexpected authentication error occurred.";
+      if (res.user != null) {
+        // 2. 'profiles' table se role fetch karna (Desktop logic ke mutabiq)
+        final profileData = await _supabase
+            .from('profiles')
+            .select('role, roles, employee_code')
+            .eq('id', res.user!.id)
+            .single();
+
+        // Data save karna
+        userRole = profileData['role'];
+        userRoles = profileData['roles'] as List<dynamic>;
+
+        loading = false;
+        notifyListeners();
+        return true;
       }
+    } on AuthException catch (e) {
+      // Supabase specific error handling
+      error = e.message;
     } catch (e) {
-      error = "Connection problem. Please check your internet.";
+      error = "An unexpected error occurred: $e";
     }
 
     loading = false;

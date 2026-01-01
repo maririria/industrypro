@@ -269,10 +269,9 @@ class _LoginViewState extends State<_LoginView> {
     );
   }
 
- void _handleLogin(BuildContext context) async {
+void _handleLogin(BuildContext context) async {
   if (_formKey.currentState!.validate()) {
     final controller = Provider.of<LoginController>(context, listen: false);
-    // Theme provider ka access yahan bhi chahiye parameters pass karne ke liye
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     
     final success = await controller.login(
@@ -281,21 +280,25 @@ class _LoginViewState extends State<_LoginView> {
     );
 
     if (success && context.mounted) {
+      // Role-based Navigation
+      if (controller.userRole == 'admin') {
+         // Agar admin hai toh admin panel le jayein
+         print("Admin Dashboard logic here");
+      }
+
       Navigator.pushAndRemoveUntil(
         context, 
         MaterialPageRoute(
           builder: (_) => MainLayout(
-            isDark: themeProvider.isDarkMode, // Pass isDark parameter
-            onToggleTheme: () => themeProvider.toggleTheme(), // Pass toggle function
+            isDark: themeProvider.isDarkMode,
+            onToggleTheme: () => themeProvider.toggleTheme(),
+            userRoles: controller.userRoles ?? [],
           ),
         ),
         (route) => false,
       );
     } else if (context.mounted && controller.error != null) {
-      // Error message handling
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(controller.error!)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.error!)));
     }
   }
 }
