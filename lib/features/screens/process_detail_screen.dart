@@ -1,150 +1,150 @@
 import 'package:flutter/material.dart';
 
 class ProcessDetailScreen extends StatefulWidget {
-  final String processName;
-  const ProcessDetailScreen({super.key, required this.processName});
+  final String title;
+  final int processId;
+
+  const ProcessDetailScreen({
+    super.key,
+    required this.title,
+    required this.processId,
+  });
 
   @override
   State<ProcessDetailScreen> createState() => _ProcessDetailScreenState();
 }
 
 class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
-  String filter = "All";
+  String filter = "all";
   String search = "";
 
-  List<Map<String, dynamic>> jobs = [
-    {
-      "id": "11203 - 1",
-      "customer": "Ahmad",
-      "completed": false,
-    },
-    {
-      "id": "11203 - 2",
-      "customer": "Yusuf",
-      "completed": true,
-    },
-    {
-      "id": "12301 - 1",
-      "customer": "Kashif",
-      "completed": false,
-    },
-  ];
+  List<Map<String, dynamic>> allJobs = [];
+  List<Map<String, dynamic>> visibleJobs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadDummyData();
+  }
+
+  void loadDummyData() {
+    allJobs = [
+      {
+        "jobId": "1203-1",
+        "customer": "Ali Traders",
+        "status": "pending",
+      },
+      {
+        "jobId": "1204-2",
+        "customer": "Fast Print",
+        "status": "completed",
+      },
+    ];
+    visibleJobs = List.from(allJobs);
+    setState(() {});
+  }
+
+  void applySearch(String value) {
+    search = value;
+    applyFilters();
+  }
+
+  void applyFilter(String value) {
+    filter = value;
+    applyFilters();
+  }
+
+  void applyFilters() {
+    visibleJobs = allJobs.where((job) {
+      final matchSearch = job["jobId"]
+              .toLowerCase()
+              .contains(search.toLowerCase()) ||
+          job["customer"]
+              .toLowerCase()
+              .contains(search.toLowerCase());
+
+      final matchFilter =
+          filter == "all" ? true : job["status"] == filter;
+
+      return matchSearch && matchFilter;
+    }).toList();
+
+    setState(() {});
+  }
+
+  void markCompleted(int index) {
+    visibleJobs[index]["status"] = "completed";
+    setState(() {});
+    // 🔴 Later: Supabase update
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filteredJobs = jobs.where((job) {
-      if (filter == "Pending" && job["completed"]) return false;
-      if (filter == "Completed" && !job["completed"]) return false;
-      if (search.isNotEmpty &&
-          !job["customer"]
-              .toLowerCase()
-              .contains(search.toLowerCase()) &&
-          !job["id"].contains(search)) return false;
-      return true;
-    }).toList();
+    final completed =
+        visibleJobs.where((j) => j["status"] == "completed").length;
+    final progress =
+        visibleJobs.isEmpty ? 0.0 : completed / visibleJobs.length;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(),
-        title: Text(widget.processName),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: Text(widget.title)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            LinearProgressIndicator(value: progress),
+            const SizedBox(height: 12),
 
-      body: Column(
-        children: [
-          // 🔹 PROGRESS
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LinearProgressIndicator(
-                  value: jobs.where((j) => j["completed"]).length /
-                      jobs.length,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                    "${jobs.where((j) => j["completed"]).length} / ${jobs.length} completed"),
-              ],
-            ),
-          ),
-
-          // 🔹 SEARCH
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              onChanged: (v) => setState(() => search = v),
+            TextField(
+              onChanged: applySearch,
               decoration: const InputDecoration(
-                hintText: "Search job / customer",
+                hintText: "Search job or customer",
                 prefixIcon: Icon(Icons.search),
               ),
             ),
-          ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          // 🔹 FILTERS
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: ["All", "Pending", "Completed"].map((f) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: ChoiceChip(
-                  label: Text(f),
-                  selected: filter == f,
-                  onSelected: (_) => setState(() => filter = f),
-                ),
-              );
-            }).toList(),
-          ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: ["all", "pending", "completed"].map((f) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ChoiceChip(
+                    label: Text(f),
+                    selected: filter == f,
+                    onSelected: (_) => applyFilter(f),
+                  ),
+                );
+              }).toList(),
+            ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 12),
 
-          // 🔹 JOB LIST
-          Expanded(
-            child: Scrollbar(
-              thumbVisibility: true,
+            Expanded(
               child: ListView.builder(
-                itemCount: filteredJobs.length,
+                itemCount: visibleJobs.length,
                 itemBuilder: (context, index) {
-                  final job = filteredJobs[index];
-                  return Container(
-                    margin: const EdgeInsets.all(12),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(job["id"],
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(job["customer"]),
-                        const SizedBox(height: 6),
-                        job["completed"]
-                            ? const Text(
-                                "Completed by user",
-                                style: TextStyle(color: Colors.green),
-                              )
-                            : ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    job["completed"] = true;
-                                  });
-                                },
-                                child: const Text("Mark Completed"),
-                              ),
-                      ],
+                  final job = visibleJobs[index];
+                  return Card(
+                    child: ListTile(
+                      title: Text(job["jobId"]),
+                      subtitle: Text(job["customer"]),
+                      trailing: job["status"] == "pending"
+                          ? ElevatedButton(
+                              onPressed: () => markCompleted(index),
+                              child: const Text("Mark Completed"),
+                            )
+                          : const Text(
+                              "Completed",
+                              style: TextStyle(color: Colors.green),
+                            ),
                     ),
                   );
                 },
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
