@@ -8,9 +8,11 @@ class ThemeProvider extends ChangeNotifier {
       _isDark ? AppTheme.darkTheme : AppTheme.lightTheme;
 
   bool get isDark => _isDark;
+  bool get isDarkMode => _isDark;
 
   void toggleTheme() {
     _isDark = !_isDark;
     notifyListeners();
   }
 }
+
