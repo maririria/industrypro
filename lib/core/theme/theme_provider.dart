@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'app_theme.dart';
 
 class ThemeProvider extends ChangeNotifier {
   bool _isDark = false;
@@ -9,8 +8,19 @@ class ThemeProvider extends ChangeNotifier {
   bool get isDarkMode => _isDark; 
   double get fontSizeMultiplier => _fontSizeMultiplier;
 
-  ThemeData get currentTheme => _isDark ? AppTheme.darkTheme : AppTheme.lightTheme;
-
+ThemeData get currentTheme => _isDark 
+    ? ThemeData.dark().copyWith(
+        primaryColor: Colors.deepPurple,
+        scaffoldBackgroundColor: Colors.transparent,
+      ) 
+    : ThemeData.light().copyWith(
+        primaryColor: const Color(0xFF4A148C), // Deep Purple
+        scaffoldBackgroundColor: Colors.transparent,
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Color(0xFF4A148C)),
+          bodyMedium: TextStyle(color: Color(0xFF4A148C)),
+        ),
+      );
   void toggleTheme() {
     _isDark = !_isDark;
     notifyListeners();
