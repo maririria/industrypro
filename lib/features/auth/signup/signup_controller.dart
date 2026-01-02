@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignupController extends ChangeNotifier {
-  // Supabase client instance
   final SupabaseClient _supabase = Supabase.instance.client;
   
   bool loading = false;
   String? error;
 
-  // 1. Email/Password Signup + Store Profile in 'users' table
+  // 1. Email/Password Signup + Store Profile in 'profiles' table
   Future<bool> signup({
     required String employeeCode, 
     required String password, 
@@ -21,26 +20,22 @@ class SignupController extends ChangeNotifier {
     try {
       final email = "$employeeCode@operativex.com";
 
-      // Supabase Auth mein user create karna
       final AuthResponse res = await _supabase.auth.signUp(
         email: email,
         password: password,
-        data: {'full_name': name}, // Metadata mein name save karna
+        data: {'full_name': name},
       );
 
       if (res.user != null) {
-        // Supabase mein 'users' table mein extra data save karna
-        // Note: Make sure aapne Supabase DB mein 'users' table banaya hua hai
-        await _supabase.from('users').insert({
-          'id': res.user!.id, // Auth ID
-          'name': name,
-          'email': email,
+        // 'users' ki jagah 'profiles' table use karein
+        await _supabase.from('profiles').insert({
+          'id': res.user!.id,
+          'employee_code': employeeCode, 
           'role': 'employee',
+          'roles': ['employee'], // Array format agar zaroorat ho
           'created_at': DateTime.now().toIso8601String(),
         });
         
-        loading = false;
-        notifyListeners();
         return true;
       }
     } on AuthException catch (e) {
@@ -54,19 +49,20 @@ class SignupController extends ChangeNotifier {
     return false;
   }
 
-  // 2. Google Sign In (Supabase style)
+  // 2. Google Sign In 
   Future<void> signInWithGoogle() async {
     try {
       loading = true;
       error = null;
       notifyListeners();
 
-      // Supabase natively Google login support karta hai
+      
       await _supabase.auth.signInWithOAuth(
         OAuthProvider.google,
-        // redirectTo: 'io.supabase.flutter://login-callback/', // Optional: deep link configuration
+        redirectTo: 'atjzalcufttndzjyjigp.supabase.co/auth/v1/callback', 
       );
       
+     
     } catch (e) {
       error = "Google Sign-In failed: $e";
     } finally {
@@ -75,15 +71,15 @@ class SignupController extends ChangeNotifier {
     }
   }
 
-  // 3. Facebook Sign In (Supabase style)
+  // 3. Facebook Sign In
   Future<void> signInWithFacebook() async {
     try {
       loading = true;
-      error = null;
       notifyListeners();
 
       await _supabase.auth.signInWithOAuth(
         OAuthProvider.facebook,
+        redirectTo: 'https://atjzalcufttndzjyjigp.supabase.co/auth/v1/callback',
       );
     } catch (e) {
       error = "Facebook Sign-In failed: $e";
