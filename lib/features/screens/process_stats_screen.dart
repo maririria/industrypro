@@ -5,14 +5,17 @@ import '../../core/theme/theme_provider.dart';
 
 class ProcessStatsScreen extends StatelessWidget {
   final String title;
-  const ProcessStatsScreen({super.key, required this.title});
+  final Map<String, dynamic> stats; // 🆕 Data coming from Detail Screen
+
+  const ProcessStatsScreen({super.key, required this.title, required this.stats});
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDark;
     final scale = themeProvider.fontSizeMultiplier;
-    final primaryColor = isDark ? Colors.white : const Color(0xFF4A148C);
+    final primaryPurple = const Color(0xFF4A148C);
+    final color = isDark ? Colors.white : primaryPurple;
 
     return Scaffold(
       body: Stack(
@@ -26,14 +29,14 @@ class ProcessStatsScreen extends StatelessWidget {
           SafeArea(
             child: Column(
               children: [
-                _buildHeader(context, primaryColor, scale),
+                _buildHeader(context, color, scale),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
-                      _buildStatCard("Total Jobs", "45", Icons.assignment, Colors.blue, isDark, scale),
-                      _buildStatCard("Completed", "15", Icons.check_circle, Colors.green, isDark, scale),
-                      _buildStatCard("Pending", "30", Icons.pending_actions, Colors.orange, isDark, scale),
+                      _buildStatCard("Total Jobs", stats['total'].toString(), Icons.assignment, Colors.blue, isDark, scale, primaryPurple),
+                      _buildStatCard("Completed", stats['completed'].toString(), Icons.check_circle, Colors.green, isDark, scale, primaryPurple),
+                      _buildStatCard("Pending", stats['pending'].toString(), Icons.pending_actions, Colors.orange, isDark, scale, primaryPurple),
                     ],
                   ),
                 ),
@@ -57,28 +60,28 @@ class ProcessStatsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard(String label, String count, IconData icon, Color accent, bool isDark, double scale) {
+  Widget _buildStatCard(String label, String count, IconData icon, Color accent, bool isDark, double scale, Color purple) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.6),
+        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 25,
-            backgroundColor: accent.withOpacity(0.2),
+            backgroundColor: accent.withValues(alpha: 0.2),
             child: Icon(icon, color: accent, size: 30),
           ),
           const SizedBox(width: 20),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 14 * scale, color: isDark ? Colors.white70 : Colors.black54)),
-              Text(count, style: GoogleFonts.balooBhai2(fontSize: 32 * scale, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF4A148C))),
+              Text(label, style: TextStyle(fontSize: 14 * scale, color: purple, fontWeight: FontWeight.bold)),
+              Text(count, style: GoogleFonts.balooBhai2(fontSize: 32 * scale, fontWeight: FontWeight.bold, color: purple)),
             ],
           ),
         ],

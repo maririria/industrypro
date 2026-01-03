@@ -44,7 +44,6 @@ class _ProcessesScreenState extends State<ProcessesScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: stream,
@@ -73,24 +72,17 @@ class _ProcessesScreenState extends State<ProcessesScreen> {
                     );
                   }
 
-                  // 🔐 ROLE-BASED PROCESS FILTERING
                   final allProcesses = snapshot.data!;
                   final filteredProcesses = allProcesses.where((process) {
-                    final processName =
-                        process['process_name']?.toString().toLowerCase() ?? "";
+                    final processName = process['process_name']?.toString().toLowerCase() ?? "";
 
-                    // Admin → sab kuch
                     if (widget.userRoles?.contains('admin') ?? false) {
                       return true;
                     }
 
-                    // Worker → sirf apni role wali process
                     return widget.userRoles?.any(
-                          (role) => processName.contains(
-                            role.toString().toLowerCase(),
-                          ),
-                        ) ??
-                        false;
+                          (role) => processName.contains(role.toString().toLowerCase()),
+                        ) ?? false;
                   }).toList();
 
                   if (filteredProcesses.isEmpty) {
@@ -106,18 +98,14 @@ class _ProcessesScreenState extends State<ProcessesScreen> {
                     itemCount: filteredProcesses.length,
                     itemBuilder: (context, index) {
                       final process = filteredProcesses[index];
-                      final String processName =
-                          process['process_name']?.toString() ?? 'Unknown';
-                      final int processId =
-                          int.tryParse(process['process_id'].toString()) ?? 0;
+                      final String processName = process['process_name']?.toString() ?? 'Unknown';
+                      final int processId = int.tryParse(process['process_id'].toString()) ?? 0;
 
                       return GestureDetector(
                         onTap: () {
                           if (processId == 0) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Invalid process ID"),
-                              ),
+                              const SnackBar(content: Text("Invalid process ID")),
                             );
                             return;
                           }
@@ -128,50 +116,44 @@ class _ProcessesScreenState extends State<ProcessesScreen> {
                               builder: (_) => ProcessDetailScreen(
                                 processId: processId,
                                 processName: processName,
-                                userRoles: widget.userRoles, // ✅ PASS ROLES
+                                userRoles: widget.userRoles, 
                               ),
                             ),
                           );
                         },
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 15),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 20,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.white.withOpacity(0.15)
+                            color: isDark 
+                                ? Colors.white.withOpacity(0.15) 
                                 : Colors.white.withOpacity(0.6),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
-                            ),
-                            boxShadow: isDark
-                                ? []
-                                : [
-                                    BoxShadow(
-                                      color: Colors.black12,
-                                      blurRadius: 10,
-                                    ),
-                                  ],
+                            border: Border.all(color: Colors.white.withOpacity(0.3)),
+                            boxShadow: isDark ? [] : [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                processName,
-                                style: GoogleFonts.balooBhai2(
-                                  fontSize: 20 * scale,
-                                  color: primaryColor,
-                                  fontWeight: FontWeight.w600,
+                              Expanded(
+                                child: Text(
+                                  processName,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: GoogleFonts.balooBhai2(
+                                    fontSize: 20 * scale,
+                                    color: primaryColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                color: primaryColor,
-                                size: 18,
-                              ),
+                              Icon(Icons.arrow_forward_ios, color: primaryColor, size: 18),
                             ],
                           ),
                         ),
