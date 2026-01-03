@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/theme/theme_provider.dart';
+import '../screens/process_stats_screen.dart';
 
 class ProcessDetailScreen extends StatefulWidget {
-  // Friend ka UI variable (title) aur aapka backend variable (processName) dono ko ek kar diya
   final int processId;
-  final String processName; 
+  final String processName;
 
   const ProcessDetailScreen({
-    super.key, 
-    required this.processId, 
-    required this.processName
+    super.key,
+    required this.processId,
+    required this.processName,
   });
 
   @override
@@ -17,13 +20,12 @@ class ProcessDetailScreen extends StatefulWidget {
 }
 
 class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
-  String filter = "All"; // Friend ka filter logic aur aapka realtime logic combine
+  String filter = "All";
   String search = "";
 
-  // 🔹 Aapka Backend Function (Mehfooz tareeqe se)
+  // 🔹 BACKEND: Mark Job as Completed (Friend's Logic)
   Future<void> markAsCompleted(dynamic rowId) async {
     try {
-      final int parsedId = int.parse(rowId.toString());
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
@@ -33,19 +35,12 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
           .eq('id', user.id)
           .single();
 
-      // Database Update (Requires UPDATE policy in Supabase)
-      final response = await Supabase.instance.client
-          .from('job_processes')
-          .update({
-            'status': 'completed',
-            'employee_code': profile['employee_code'],
-            'updated_at': DateTime.now().toIso8601String(),
-            'end_time': DateTime.now().toIso8601String(),
-          })
-          .eq('id', parsedId)
-          .select();
-
-      if (response.isEmpty) throw "Update reject ho gaya (RLS check karein)";
+      await Supabase.instance.client.from('job_processes').update({
+        'status': 'completed',
+        'employee_code': profile['employee_code'],
+        'updated_at': DateTime.now().toIso8601String(),
+        'end_time': DateTime.now().toIso8601String(),
+      }).eq('id', rowId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -61,136 +56,226 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
     }
   }
 
+  // 🔹 BACKEND: Extra Details Fetcher (Friend's Logic)
+  Future<Map<String, String>> _getExtraDetails(dynamic jobId, dynamic machineId) async {
+    String customer = "Loading...";
+    String machine = "N/A";
+    try {
+      final jobData = await Supabase.instance.client
+          .from('job_cards')
+          .select('customer_name')
+          .eq('job_id', jobId)
+          .maybeSingle();
+      if (jobData != null) customer = jobData['customer_name'] ?? "Unknown";
+
+      if (machineId != null) {
+        final machData = await Supabase.instance.client
+            .from('machines')
+            .select('name')
+            .eq('id', machineId)
+            .maybeSingle();
+        if (machData != null) machine = machData['name'] ?? "N/A";
+      }
+    } catch (e) { customer = "Unknown"; }
+    return {'customer': customer, 'machine': machine};
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 🔹 Aapka Realtime Stream Logic
+    // 🎨 UI: Your Theme Integration
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDark;
+    final scale = themeProvider.fontSizeMultiplier;
+    final primaryColor = isDark ? Colors.white : const Color(0xFF4A148C);
+    final cardBg = isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7);
+
+    // ⚡ BACKEND: Realtime Stream
     final stream = Supabase.instance.client
         .from('job_processes')
         .stream(primaryKey: ['id'])
         .eq('process_id', widget.processId);
 
     return Scaffold(
-      backgroundColor: Colors.blueGrey[900],
-      appBar: AppBar(
-        title: Text(widget.processName), 
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // 🔹 Search Bar (Integrated)
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: TextField(
-              onChanged: (v) => setState(() => search = v),
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "Search Job ID...",
-                hintStyle: const TextStyle(color: Colors.white54),
-                filled: true,
-                fillColor: Colors.white10,
-                prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      backgroundColor: Colors.transparent, // Layout BG will show through
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(context, primaryColor, scale),
+            _buildProgressCard(isDark, scale, primaryColor, cardBg),
+            _buildSearchAndFilters(isDark, scale, cardBg),
+            
+            // ⚡ BACKEND: StreamBuilder for Realtime List
+            Expanded(
+              child: StreamBuilder<List<Map<String, dynamic>>>(
+                stream: stream,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}", style: TextStyle(color: primaryColor)));
+                  if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.purpleAccent));
+
+                  final filteredJobs = snapshot.data!.where((j) {
+                    final s = (j['status'] ?? 'pending').toString().toLowerCase();
+                    final jId = (j['job_id'] ?? '').toString();
+                    bool matchesFilter = (filter == "All") || 
+                                       (filter == "Pending" && s == "pending") || 
+                                       (filter == "Completed" && s == "completed");
+                    return matchesFilter && jId.contains(search);
+                  }).toList();
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: filteredJobs.length,
+                    itemBuilder: (context, index) => _buildJobCard(filteredJobs[index], isDark, scale, primaryColor, cardBg),
+                  );
+                },
               ),
             ),
-          ),
-          
-          // 🔹 Filters (Friend ka UI + Aapka Logic)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: ["All", "Pending", "Completed"].map((f) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: ChoiceChip(
-                    label: Text(f),
-                    selected: filter == f,
-                    onSelected: (_) => setState(() => filter = f),
-                  ),
-                );
-              }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🎨 UI: Your Header
+  Widget _buildHeader(BuildContext context, Color color, double scale) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      child: Row(
+        children: [
+          IconButton(icon: Icon(Icons.arrow_back_ios_new, color: color, size: 20), onPressed: () => Navigator.pop(context)),
+          Text(widget.processName, style: GoogleFonts.balooBhai2(fontSize: 28 * scale, color: color, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  // 🎨 UI: Your Progress Card
+  Widget _buildProgressCard(bool isDark, double scale, Color primaryColor, Color cardBg) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProcessStatsScreen(title: widget.processName))),
+      child: Container(
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: Colors.white.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Overall Progress", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14 * scale)),
+                Text("30%", style: GoogleFonts.balooBhai2(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 18 * scale)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(value: 0.3, minHeight: 12, backgroundColor: Colors.black12, color: Colors.purpleAccent),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🎨 UI: Your Filters
+  Widget _buildSearchAndFilters(bool isDark, double scale, Color cardBg) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          TextField(
+            onChanged: (v) => setState(() => search = v),
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+            decoration: InputDecoration(
+              hintText: "Search Job ID...",
+              hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
+              filled: true,
+              fillColor: cardBg,
+              prefixIcon: Icon(Icons.search, color: isDark ? Colors.white38 : Colors.black38),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // 🔹 Realtime List (Backend + UI Mix)
-          Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-                final jobs = snapshot.data!.where((j) {
-                  final s = (j['status'] ?? 'pending').toString().toLowerCase();
-                  final jId = (j['job_id'] ?? '').toString();
-                  bool matchesFilter = (filter == "All") || 
-                                     (filter == "Pending" && s == "pending") || 
-                                     (filter == "Completed" && s == "completed");
-                  return matchesFilter && jId.contains(search);
-                }).toList();
-
-                return ListView.builder(
-                  itemCount: jobs.length,
-                  itemBuilder: (context, index) {
-                    final job = jobs[index];
-                    final String status = (job['status'] ?? 'pending').toString().toLowerCase();
-                    bool isPrinting = widget.processName.toLowerCase().contains("printing");
-
-                    return FutureBuilder(
-                      future: _getExtraDetails(job['job_id'], job['machine_id']),
-                      builder: (context, AsyncSnapshot<Map<String, String>> details) {
-                        return Card(
-                          color: Colors.white.withOpacity(0.05),
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: ListTile(
-                            title: Text("Job: ${job['job_id']} | ${details.data?['customer'] ?? '...'}", 
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("Sub-Job: ${job['sub_job_id']}", style: const TextStyle(color: Colors.white70)),
-                                if (isPrinting) Text("Machine: ${details.data?['machine'] ?? 'N/A'}", 
-                                    style: const TextStyle(color: Colors.orangeAccent)),
-                                Text("Status: ${status.toUpperCase()}", 
-                                    style: TextStyle(color: status == 'completed' ? Colors.greenAccent : Colors.amberAccent)),
-                              ],
-                            ),
-                            trailing: status == 'completed'
-                                ? const Icon(Icons.check_circle, color: Colors.greenAccent, size: 30)
-                                : ElevatedButton(
-                                    onPressed: () => markAsCompleted(job['id']),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                    child: const Text("Done"),
-                                  ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+          Row(
+            children: ["All", "Pending", "Completed"].map((f) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(f, style: TextStyle(fontSize: 10 * scale)),
+                selected: filter == f,
+                onSelected: (_) => setState(() => filter = f),
+                selectedColor: const Color(0xFF6200EE),
+                labelStyle: TextStyle(color: filter == f ? Colors.white : (isDark ? Colors.white60 : Colors.black54)),
+                backgroundColor: cardBg,
+              ),
+            )).toList(),
           ),
         ],
       ),
     );
   }
 
-  // 🔹 Aapka Customer/Machine Fetching Logic
-  Future<Map<String, String>> _getExtraDetails(dynamic jobId, dynamic machineId) async {
-    String customer = "Unknown";
-    String machine = "No Machine";
-    try {
-      final jobData = await Supabase.instance.client.from('job_cards').select('customer_name').eq('job_id', jobId).maybeSingle();
-      if (jobData != null) customer = jobData['customer_name'] ?? customer;
+  // 🎨 UI: Your Job Card + ⚡ BACKEND Data
+  Widget _buildJobCard(Map<String, dynamic> job, bool isDark, double scale, Color primaryColor, Color cardBg) {
+    final status = (job['status'] ?? 'pending').toString().toLowerCase();
+    
+    return FutureBuilder<Map<String, String>>(
+      future: _getExtraDetails(job['job_id'], job['machine_id']),
+      builder: (context, details) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 15),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withOpacity(0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("${job['job_id']} / ${job['sub_job_id']}", 
+                    style: TextStyle(color: primaryColor, fontSize: 18 * scale, fontWeight: FontWeight.bold)),
+                  _statusBadge(status),
+                ],
+              ),
+              Text("Customer: ${details.data?['customer'] ?? '...'}", 
+                style: TextStyle(color: isDark ? Colors.white60 : Colors.black87, fontSize: 14 * scale)),
+              if (status == 'pending') ...[
+                const SizedBox(height: 15),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6200EE),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => markAsCompleted(job['id']),
+                    child: const Text("Mark Completed", style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ]
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-      if (machineId != null) {
-        final machData = await Supabase.instance.client.from('machines').select('name').eq('id', machineId).maybeSingle();
-        if (machData != null) machine = machData['name'] ?? machine;
-      }
-    } catch (e) { print(e); }
-    return {'customer': customer, 'machine': machine};
+  Widget _statusBadge(String status) {
+    bool isDone = status == "completed";
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDone ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(status.toUpperCase(), 
+        style: TextStyle(color: isDone ? Colors.greenAccent : Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
   }
 }
