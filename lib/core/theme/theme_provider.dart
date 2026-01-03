@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
-import 'app_theme.dart'; // Upar wali file ko yahan import karein
+import 'app_theme.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  bool _isDarkMode = false;
+  bool _isDark = false;
+  double _fontSizeMultiplier = 1.0;
 
-  bool get isDarkMode => _isDarkMode;
+  bool get isDark => _isDark;
+  bool get isDarkMode => _isDark; 
+  double get fontSizeMultiplier => _fontSizeMultiplier;
 
-  // Ye getter decide karega ke screen par light theme dikhani hai ya dark
-  ThemeData get currentTheme => _isDarkMode ? AppTheme.darkTheme : AppTheme.lightTheme;
+  ThemeData get currentTheme => _isDark ? AppTheme.darkTheme : AppTheme.lightTheme;
 
   void toggleTheme() {
-    _isDarkMode = !_isDarkMode;
-    notifyListeners(); // Ye screen ko update karega
+    _isDark = !_isDark;
+    notifyListeners();
+  }
+
+  void setFontSize(String size) {
+    if (size == 'Small') _fontSizeMultiplier = 0.8;
+    else if (size == 'Medium') _fontSizeMultiplier = 1.0;
+    else if (size == 'Large') _fontSizeMultiplier = 1.3;
+    notifyListeners();
   }
 }

@@ -2,35 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProcessDetailScreen extends StatefulWidget {
+  // Friend ka UI variable (title) aur aapka backend variable (processName) dono ko ek kar diya
   final int processId;
-  final String processName;
-  const ProcessDetailScreen({super.key, required this.processId, required this.processName});
+  final String processName; 
+
+  const ProcessDetailScreen({
+    super.key, 
+    required this.processId, 
+    required this.processName
+  });
 
   @override
   State<ProcessDetailScreen> createState() => _ProcessDetailScreenState();
 }
 
 class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
-  String filter = "All";
+  String filter = "All"; // Friend ka filter logic aur aapka realtime logic combine
   String search = "";
 
-  // 🔹 "Done" button ka function
+  // 🔹 Aapka Backend Function (Mehfooz tareeqe se)
   Future<void> markAsCompleted(dynamic rowId) async {
     try {
-      // rowId ko safe tareeqe se int mein badalna (int4 fix)
       final int parsedId = int.parse(rowId.toString());
-      
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
-      // Profile se employee code lena
       final profile = await Supabase.instance.client
           .from('profiles')
           .select('employee_code')
           .eq('id', user.id)
           .single();
 
-      // Database Update
+      // Database Update (Requires UPDATE policy in Supabase)
       final response = await Supabase.instance.client
           .from('job_processes')
           .update({
@@ -42,7 +45,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
           .eq('id', parsedId)
           .select();
 
-      if (response.isEmpty) throw "Database ne update reject kar diya (RLS check karein)";
+      if (response.isEmpty) throw "Update reject ho gaya (RLS check karein)";
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -60,7 +63,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Realtime stream
+    // 🔹 Aapka Realtime Stream Logic
     final stream = Supabase.instance.client
         .from('job_processes')
         .stream(primaryKey: ['id'])
@@ -68,10 +71,14 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
 
     return Scaffold(
       backgroundColor: Colors.blueGrey[900],
-      appBar: AppBar(title: Text(widget.processName), backgroundColor: Colors.transparent),
+      appBar: AppBar(
+        title: Text(widget.processName), 
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: Column(
         children: [
-          // 🔹 Search Bar
+          // 🔹 Search Bar (Integrated)
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -82,18 +89,19 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
                 hintStyle: const TextStyle(color: Colors.white54),
                 filled: true,
                 fillColor: Colors.white10,
+                prefixIcon: const Icon(Icons.search, color: Colors.white54),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
           
-          // 🔹 Filters
+          // 🔹 Filters (Friend ka UI + Aapka Logic)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: ["All", "Pending", "Completed"].map((f) {
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: ChoiceChip(
                     label: Text(f),
                     selected: filter == f,
@@ -104,16 +112,22 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
             ),
           ),
 
+          const SizedBox(height: 10),
+
+          // 🔹 Realtime List (Backend + UI Mix)
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: stream,
               builder: (context, snapshot) {
+                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
                 final jobs = snapshot.data!.where((j) {
                   final s = (j['status'] ?? 'pending').toString().toLowerCase();
                   final jId = (j['job_id'] ?? '').toString();
-                  bool matchesFilter = (filter == "All") || (filter == "Pending" && s == "pending") || (filter == "Completed" && s == "completed");
+                  bool matchesFilter = (filter == "All") || 
+                                     (filter == "Pending" && s == "pending") || 
+                                     (filter == "Completed" && s == "completed");
                   return matchesFilter && jId.contains(search);
                 }).toList();
 
@@ -128,7 +142,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
                       future: _getExtraDetails(job['job_id'], job['machine_id']),
                       builder: (context, AsyncSnapshot<Map<String, String>> details) {
                         return Card(
-                          color: Colors.white10,
+                          color: Colors.white.withOpacity(0.05),
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: ListTile(
                             title: Text("Job: ${job['job_id']} | ${details.data?['customer'] ?? '...'}", 
@@ -164,6 +178,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
     );
   }
 
+  // 🔹 Aapka Customer/Machine Fetching Logic
   Future<Map<String, String>> _getExtraDetails(dynamic jobId, dynamic machineId) async {
     String customer = "Unknown";
     String machine = "No Machine";
