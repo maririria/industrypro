@@ -1,16 +1,21 @@
 // lib/features/screens/process_detail_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/theme/theme_provider.dart';
+import '../screens/process_stats_screen.dart';
 
 class ProcessDetailScreen extends StatefulWidget {
   final int processId;
-  final String processName; 
-  final List<dynamic>? userRoles; // 🔹 Added Roles
+  final String processName;
+  final List<dynamic>? userRoles;
 
   const ProcessDetailScreen({
-    super.key, 
-    required this.processId, 
+    super.key,
+    required this.processId,
     required this.processName,
     this.userRoles,
   });
@@ -20,9 +25,9 @@ class ProcessDetailScreen extends StatefulWidget {
 }
 
 class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
-  String filter = "All"; 
+  String filter = "All";
   String search = "";
-  String? currentUserEmployeeCode; // 🔹 To store worker code
+  String? currentUserEmployeeCode;
 
   @override
   void initState() {
@@ -30,29 +35,34 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
     _fetchCurrentUserCode();
   }
 
-  // 🔹 Fetch worker's employee_code on screen load
+  /// 🔹 Fetch logged-in worker employee_code
   Future<void> _fetchCurrentUserCode() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      if (user != null) {
-        final profile = await Supabase.instance.client
-            .from('profiles')
-            .select('employee_code')
-            .eq('id', user.id)
-            .single();
-        setState(() {
-          currentUserEmployeeCode = profile['employee_code'];
-        });
-      }
+      if (user == null) return;
+
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('employee_code')
+          .eq('id', user.id)
+          .single();
+
+      setState(() {
+        currentUserEmployeeCode = profile['employee_code'];
+      });
     } catch (e) {
-      debugPrint("Error fetching profile: $e");
+      debugPrint("Profile fetch error: $e");
     }
   }
 
+  /// 🔹 Mark job as completed
   Future<void> markAsCompleted(dynamic rowId) async {
     try {
-      final int parsedId = int.parse(rowId.toString());
-      if (currentUserEmployeeCode == null) await _fetchCurrentUserCode();
+      if (currentUserEmployeeCode == null) {
+        await _fetchCurrentUserCode();
+      }
+
+      final int id = int.parse(rowId.toString());
 
       final response = await Supabase.instance.client
           .from('job_processes')
@@ -62,14 +72,19 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
             'updated_at': DateTime.now().toIso8601String(),
             'end_time': DateTime.now().toIso8601String(),
           })
-          .eq('id', parsedId)
+          .eq('id', id)
           .select();
 
-      if (response.isEmpty) throw "Update reject ho gaya (RLS check karein)";
+      if (response.isEmpty) {
+        throw "Update blocked (check RLS policies)";
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Job Completed!"), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text("Job Completed"),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
@@ -81,123 +96,121 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
     }
   }
 
+  /// 🔹 Fetch customer & machine
+  Future<Map<String, String>> _getExtraDetails(dynamic jobId, dynamic machineId) async {
+    String customer = "Unknown";
+    String machine = "N/A";
+
+    try {
+      final job = await Supabase.instance.client
+          .from('job_cards')
+          .select('customer_name')
+          .eq('job_id', jobId)
+          .maybeSingle();
+
+      if (job != null) customer = job['customer_name'] ?? customer;
+
+      if (machineId != null) {
+        final mach = await Supabase.instance.client
+            .from('machines')
+            .select('name')
+            .eq('id', machineId)
+            .maybeSingle();
+
+        if (mach != null) machine = mach['name'] ?? machine;
+      }
+    } catch (_) {}
+
+    return {'customer': customer, 'machine': machine};
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+    final isDark = theme.isDark;
+    final scale = theme.fontSizeMultiplier;
+
+    final primaryColor = isDark ? Colors.white : const Color(0xFF4A148C);
+    final cardBg = isDark
+        ? Colors.white.withOpacity(0.1)
+        : Colors.white.withOpacity(0.8);
+
     final stream = Supabase.instance.client
         .from('job_processes')
         .stream(primaryKey: ['id'])
         .eq('process_id', widget.processId);
 
     return Scaffold(
-      backgroundColor: Colors.blueGrey[900],
-      appBar: AppBar(
-        title: Text(widget.processName), 
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: TextField(
-              onChanged: (v) => setState(() => search = v),
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "Search Job ID...",
-                hintStyle: const TextStyle(color: Colors.white54),
-                filled: true,
-                fillColor: Colors.white10,
-                prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _header(primaryColor, scale),
+            _progressCard(isDark, scale, primaryColor, cardBg),
+            _searchAndFilter(isDark, scale, cardBg),
+            Expanded(
+              child: StreamBuilder<List<Map<String, dynamic>>>(
+                stream: stream,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(child: Text(snapshot.error.toString()));
+                  }
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final jobs = snapshot.data!.where((j) {
+                    final status = (j['status'] ?? 'pending').toString().toLowerCase();
+                    final jobId = (j['job_id'] ?? '').toString();
+                    final empCode = j['employee_code']?.toString();
+
+                    final isAdmin = widget.userRoles?.contains('admin') ?? false;
+                    final isMine = empCode != null && empCode == currentUserEmployeeCode;
+                    final isUnassigned = empCode == null || empCode.isEmpty;
+
+                    final roleAllowed =
+                        isAdmin || isMine || (isUnassigned && status == 'pending');
+
+                    final filterOk =
+                        filter == "All" ||
+                        (filter == "Pending" && status == "pending") ||
+                        (filter == "Completed" && status == "completed");
+
+                    return roleAllowed && filterOk && jobId.contains(search);
+                  }).toList();
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: jobs.length,
+                    itemBuilder: (_, i) =>
+                        _jobCard(jobs[i], isDark, scale, primaryColor, cardBg),
+                  );
+                },
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// UI helpers ↓↓↓
+
+  Widget _header(Color color, double scale) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.arrow_back_ios_new, color: color),
+            onPressed: () => Navigator.pop(context),
           ),
-          
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: ["All", "Pending", "Completed"].map((f) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: ChoiceChip(
-                    label: Text(f),
-                    selected: filter == f,
-                    onSelected: (_) => setState(() => filter = f),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-                final jobs = snapshot.data!.where((j) {
-                  final s = (j['status'] ?? 'pending').toString().toLowerCase();
-                  final jId = (j['job_id'] ?? '').toString();
-                  final empCode = j['employee_code']?.toString();
-                  
-                  // 🛠️ ROLE FILTERING LOGIC
-                  bool isAdmin = widget.userRoles?.contains('admin') ?? false;
-                  bool isMyJob = currentUserEmployeeCode != null && empCode == currentUserEmployeeCode;
-                  bool isUnassigned = empCode == null || empCode.isEmpty;
-
-                  // Admin sab dekh sakta hai, Worker ko sirf apni assigned ya unassigned jobs dikhengi
-                  bool roleAccessible = isAdmin || isMyJob || (isUnassigned && s == 'pending');
-
-                  bool matchesFilter = (filter == "All") || 
-                                       (filter == "Pending" && s == "pending") || 
-                                       (filter == "Completed" && s == "completed");
-                  
-                  return roleAccessible && matchesFilter && jId.contains(search);
-                }).toList();
-
-                return ListView.builder(
-                  itemCount: jobs.length,
-                  itemBuilder: (context, index) {
-                    final job = jobs[index];
-                    final String status = (job['status'] ?? 'pending').toString().toLowerCase();
-                    bool isPrinting = widget.processName.toLowerCase().contains("printing");
-
-                    return FutureBuilder(
-                      future: _getExtraDetails(job['job_id'], job['machine_id']),
-                      builder: (context, AsyncSnapshot<Map<String, String>> details) {
-                        return Card(
-                          color: Colors.white.withOpacity(0.05),
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: ListTile(
-                            title: Text("Job: ${job['job_id']} | ${details.data?['customer'] ?? '...'}", 
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("Sub-Job: ${job['sub_job_id']}", style: const TextStyle(color: Colors.white70)),
-                                if (isPrinting) Text("Machine: ${details.data?['machine'] ?? 'N/A'}", 
-                                    style: const TextStyle(color: Colors.orangeAccent)),
-                                Text("Status: ${status.toUpperCase()}", 
-                                    style: TextStyle(color: status == 'completed' ? Colors.greenAccent : Colors.amberAccent)),
-                              ],
-                            ),
-                            trailing: status == 'completed'
-                                ? const Icon(Icons.check_circle, color: Colors.greenAccent, size: 30)
-                                : ElevatedButton(
-                                    onPressed: () => markAsCompleted(job['id']),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                    child: const Text("Done"),
-                                  ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
+          Text(
+            widget.processName,
+            style: GoogleFonts.balooBhai2(
+              fontSize: 26 * scale,
+              color: color,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -205,18 +218,111 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
     );
   }
 
-  Future<Map<String, String>> _getExtraDetails(dynamic jobId, dynamic machineId) async {
-    String customer = "Unknown";
-    String machine = "No Machine";
-    try {
-      final jobData = await Supabase.instance.client.from('job_cards').select('customer_name').eq('job_id', jobId).maybeSingle();
-      if (jobData != null) customer = jobData['customer_name'] ?? customer;
+  Widget _progressCard(bool isDark, double scale, Color color, Color bg) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProcessStatsScreen(title: widget.processName),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(25),
+        ),
+        child: Column(
+          children: const [
+            LinearProgressIndicator(value: 0.3),
+          ],
+        ),
+      ),
+    );
+  }
 
-      if (machineId != null) {
-        final machData = await Supabase.instance.client.from('machines').select('name').eq('id', machineId).maybeSingle();
-        if (machData != null) machine = machData['name'] ?? machine;
-      }
-    } catch (e) { debugPrint(e.toString()); }
-    return {'customer': customer, 'machine': machine};
+  Widget _searchAndFilter(bool isDark, double scale, Color bg) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          TextField(
+            onChanged: (v) => setState(() => search = v),
+            decoration: InputDecoration(
+              hintText: "Search Job ID",
+              filled: true,
+              fillColor: bg,
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: ["All", "Pending", "Completed"]
+                .map((f) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(f),
+                        selected: filter == f,
+                        onSelected: (_) => setState(() => filter = f),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _jobCard(
+    Map<String, dynamic> job,
+    bool isDark,
+    double scale,
+    Color color,
+    Color bg,
+  ) {
+    final status = (job['status'] ?? 'pending').toString().toLowerCase();
+    final isPrinting = widget.processName.toLowerCase().contains("printing");
+
+    return FutureBuilder<Map<String, String>>(
+      future: _getExtraDetails(job['job_id'], job['machine_id']),
+      builder: (_, snap) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 15),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Job ${job['job_id']} / ${job['sub_job_id']}",
+                style: TextStyle(
+                  fontSize: 18 * scale,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              Text("Customer: ${snap.data?['customer'] ?? '...'}"),
+              if (isPrinting)
+                Text("Machine: ${snap.data?['machine'] ?? 'N/A'}"),
+              const SizedBox(height: 10),
+              status == 'completed'
+                  ? const Icon(Icons.check_circle, color: Colors.green)
+                  : ElevatedButton(
+                      onPressed: () => markAsCompleted(job['id']),
+                      child: const Text("Mark Completed"),
+                    ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
