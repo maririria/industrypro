@@ -1,13 +1,21 @@
+// lib/features/screens/processes_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'process_detail_screen.dart';
 
-class ProcessesScreen extends StatelessWidget {
-  const ProcessesScreen({super.key});
+class ProcessesScreen extends StatefulWidget {
+  final List<dynamic>? userRoles;
+
+  const ProcessesScreen({super.key, this.userRoles});
 
   @override
+  State<ProcessesScreen> createState() => _ProcessesScreenState();
+}
+
+class _ProcessesScreenState extends State<ProcessesScreen> {
+  @override
   Widget build(BuildContext context) {
-    // Primary key 'process_id' hai aapke table mein
     final stream = Supabase.instance.client.from('processes').stream(primaryKey: ['process_id']);
 
     return Scaffold(
@@ -36,14 +44,24 @@ class ProcessesScreen extends StatelessWidget {
                     return const Center(child: Text("No processes found", style: TextStyle(color: Colors.white)));
                   }
 
-                  final processes = snapshot.data!;
+                  // 🛠️ FILTER LOGIC: User roles ke mutabiq
+                  final allProcesses = snapshot.data!;
+                  final filteredProcesses = allProcesses.where((process) {
+                    final pName = process['process_name']?.toString().toLowerCase() ?? "";
+                    if (widget.userRoles != null && widget.userRoles!.contains('admin')) {
+                      return true;
+                    }
+                    return widget.userRoles?.any((role) => pName.contains(role.toString().toLowerCase())) ?? false;
+                  }).toList();
+
+                  if (filteredProcesses.isEmpty) {
+                    return const Center(child: Text("No authorized processes", style: TextStyle(color: Colors.white70)));
+                  }
 
                   return ListView.builder(
-                    itemCount: processes.length,
+                    itemCount: filteredProcesses.length,
                     itemBuilder: (context, index) {
-                      final process = processes[index];
-                      
-                      // 🔹 FIX: 'id' ki jagah 'process_id' use karein
+                      final process = filteredProcesses[index];
                       final int safeId = int.tryParse(process['process_id'].toString()) ?? 0;
 
                       return GestureDetector(
@@ -55,12 +73,9 @@ class ProcessesScreen extends StatelessWidget {
                                 builder: (_) => ProcessDetailScreen(
                                   processId: safeId,
                                   processName: process['process_name']?.toString() ?? 'Unknown',
+                                  userRoles: widget.userRoles, // 🔹 PASSING ROLES
                                 ),
                               ),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Error: Process ID not found in DB"))
                             );
                           }
                         },

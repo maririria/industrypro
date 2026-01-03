@@ -29,14 +29,19 @@ class _MainLayoutState extends State<MainLayout> {
 
   List<Widget> getFilteredPages() {
     List<Widget> pages = [const HomeScreen()];
+    
     if (widget.userRoles.contains('printing') || 
         widget.userRoles.contains('pasting') || 
-        widget.userRoles.contains('admin')) {
-      pages.add(const ProcessesScreen());
+        widget.userRoles.contains('admin') ||
+        widget.userRoles.contains('plates')) { 
+      // 🔹 Important: ProcessesScreen mein roles pass karein
+      pages.add(ProcessesScreen(userRoles: widget.userRoles)); 
     }
+    
     if (widget.userRoles.contains('admin')) {
       pages.add(const ReportsScreen());
     }
+    
     pages.add(const ProfileScreen());
     return pages;
   }
@@ -67,20 +72,20 @@ class _MainLayoutState extends State<MainLayout> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-  "IndustryPro",
-  style: GoogleFonts.balooBhai2( 
-    fontSize: 25,
-    fontWeight: FontWeight.bold,
-    color: currentIsDark ? Colors.white : const Color(0xFF4A148C),
-  ),
-),
-                      
+                        "IndustryPro",
+                        style: GoogleFonts.balooBhai2( 
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                          color: currentIsDark ? Colors.white : const Color(0xFF4A148C),
+                        ),
+                      ),
                       IconButton(
                         icon: Icon(
                           Icons.settings, 
                           size: 28,
                           color: currentIsDark ? Colors.white : const Color(0xFF4A148C)
                         ),
+                        // 🔹 Ab yahan error nahi aayega kyunke function niche defined hai
                         onPressed: () => _showSettingsMenu(context, themeProvider),
                       ),
                     ],
@@ -96,26 +101,31 @@ class _MainLayoutState extends State<MainLayout> {
         ],
       ),
       
-      bottomNavigationBar: BottomNavbar(
-        currentIndex: currentIndex,
-        onTap: (index) => setState(() => currentIndex = index),
-      ),
+     bottomNavigationBar: BottomNavbar(
+  currentIndex: currentIndex,
+  onTap: (index) {
+    setState(() {
+      currentIndex = index;
+    });
+  },
+  userRoles: widget.userRoles, 
+),
     );
   }
 
-void _showSettingsMenu(BuildContext context, ThemeProvider provider) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: provider.isDark ? Colors.grey[900] : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-      title: Text(
-        "App Settings", 
-        style: GoogleFonts.balooBhai2(fontWeight: FontWeight.bold),
-        textAlign: TextAlign.center,
-      ),
-      content: SingleChildScrollView( 
-        child: Column(
+  
+  void _showSettingsMenu(BuildContext context, ThemeProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: provider.isDark ? Colors.grey[900] : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+        title: Text(
+          "App Settings", 
+          style: GoogleFonts.balooBhai2(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
@@ -126,32 +136,9 @@ void _showSettingsMenu(BuildContext context, ThemeProvider provider) {
                 Navigator.pop(context);
               },
             ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text("Adjust Font Size", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            Wrap(
-              spacing: 8, 
-              runSpacing: 8, 
-              alignment: WrapAlignment.center,
-              children: ['Small', 'Medium', 'Large'].map((size) {
-                return ChoiceChip(
-                  label: Text(size),
-                  selected: (size == 'Medium' && provider.fontSizeMultiplier == 1.0) ||
-                           (size == 'Small' && provider.fontSizeMultiplier < 1.0) ||
-                           (size == 'Large' && provider.fontSizeMultiplier > 1.0),
-                  onSelected: (bool selected) {
-                    if (selected) provider.setFontSize(size);
-                    Navigator.pop(context);
-                  },
-                );
-              }).toList(),
-            ),
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

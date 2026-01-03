@@ -1,15 +1,18 @@
+// lib/features/screens/process_detail_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProcessDetailScreen extends StatefulWidget {
-  // Friend ka UI variable (title) aur aapka backend variable (processName) dono ko ek kar diya
   final int processId;
   final String processName; 
+  final List<dynamic>? userRoles; // 🔹 Added Roles
 
   const ProcessDetailScreen({
     super.key, 
     required this.processId, 
-    required this.processName
+    required this.processName,
+    this.userRoles,
   });
 
   @override
@@ -17,28 +20,45 @@ class ProcessDetailScreen extends StatefulWidget {
 }
 
 class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
-  String filter = "All"; // Friend ka filter logic aur aapka realtime logic combine
+  String filter = "All"; 
   String search = "";
+  String? currentUserEmployeeCode; // 🔹 To store worker code
 
-  // 🔹 Aapka Backend Function (Mehfooz tareeqe se)
+  @override
+  void initState() {
+    super.initState();
+    _fetchCurrentUserCode();
+  }
+
+  // 🔹 Fetch worker's employee_code on screen load
+  Future<void> _fetchCurrentUserCode() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('employee_code')
+            .eq('id', user.id)
+            .single();
+        setState(() {
+          currentUserEmployeeCode = profile['employee_code'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile: $e");
+    }
+  }
+
   Future<void> markAsCompleted(dynamic rowId) async {
     try {
       final int parsedId = int.parse(rowId.toString());
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
+      if (currentUserEmployeeCode == null) await _fetchCurrentUserCode();
 
-      final profile = await Supabase.instance.client
-          .from('profiles')
-          .select('employee_code')
-          .eq('id', user.id)
-          .single();
-
-      // Database Update (Requires UPDATE policy in Supabase)
       final response = await Supabase.instance.client
           .from('job_processes')
           .update({
             'status': 'completed',
-            'employee_code': profile['employee_code'],
+            'employee_code': currentUserEmployeeCode,
             'updated_at': DateTime.now().toIso8601String(),
             'end_time': DateTime.now().toIso8601String(),
           })
@@ -63,7 +83,6 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔹 Aapka Realtime Stream Logic
     final stream = Supabase.instance.client
         .from('job_processes')
         .stream(primaryKey: ['id'])
@@ -78,7 +97,6 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
       ),
       body: Column(
         children: [
-          // 🔹 Search Bar (Integrated)
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -95,7 +113,6 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
             ),
           ),
           
-          // 🔹 Filters (Friend ka UI + Aapka Logic)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -114,7 +131,6 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
 
           const SizedBox(height: 10),
 
-          // 🔹 Realtime List (Backend + UI Mix)
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: stream,
@@ -125,10 +141,21 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
                 final jobs = snapshot.data!.where((j) {
                   final s = (j['status'] ?? 'pending').toString().toLowerCase();
                   final jId = (j['job_id'] ?? '').toString();
+                  final empCode = j['employee_code']?.toString();
+                  
+                  // 🛠️ ROLE FILTERING LOGIC
+                  bool isAdmin = widget.userRoles?.contains('admin') ?? false;
+                  bool isMyJob = currentUserEmployeeCode != null && empCode == currentUserEmployeeCode;
+                  bool isUnassigned = empCode == null || empCode.isEmpty;
+
+                  // Admin sab dekh sakta hai, Worker ko sirf apni assigned ya unassigned jobs dikhengi
+                  bool roleAccessible = isAdmin || isMyJob || (isUnassigned && s == 'pending');
+
                   bool matchesFilter = (filter == "All") || 
-                                     (filter == "Pending" && s == "pending") || 
-                                     (filter == "Completed" && s == "completed");
-                  return matchesFilter && jId.contains(search);
+                                       (filter == "Pending" && s == "pending") || 
+                                       (filter == "Completed" && s == "completed");
+                  
+                  return roleAccessible && matchesFilter && jId.contains(search);
                 }).toList();
 
                 return ListView.builder(
@@ -178,7 +205,6 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
     );
   }
 
-  // 🔹 Aapka Customer/Machine Fetching Logic
   Future<Map<String, String>> _getExtraDetails(dynamic jobId, dynamic machineId) async {
     String customer = "Unknown";
     String machine = "No Machine";
@@ -190,7 +216,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
         final machData = await Supabase.instance.client.from('machines').select('name').eq('id', machineId).maybeSingle();
         if (machData != null) machine = machData['name'] ?? machine;
       }
-    } catch (e) { print(e); }
+    } catch (e) { debugPrint(e.toString()); }
     return {'customer': customer, 'machine': machine};
   }
 }
