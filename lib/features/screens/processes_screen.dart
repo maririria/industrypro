@@ -2,12 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/theme/theme_provider.dart';
 import 'process_detail_screen.dart';
 
-class ProcessesScreen extends StatelessWidget {
-  const ProcessesScreen({super.key});
+class ProcessesScreen extends StatefulWidget {
+  final List<dynamic>? userRoles;
 
+  const ProcessesScreen({super.key, this.userRoles});
+
+  @override
+  State<ProcessesScreen> createState() => _ProcessesScreenState();
+}
+
+class _ProcessesScreenState extends State<ProcessesScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -15,12 +23,14 @@ class ProcessesScreen extends StatelessWidget {
     final scale = themeProvider.fontSizeMultiplier;
     final primaryColor = isDark ? Colors.white : const Color(0xFF4A148C);
 
-    final stream = Supabase.instance.client.from('processes').stream(primaryKey: ['process_id']);
+    final stream = Supabase.instance.client
+        .from('processes')
+        .stream(primaryKey: ['process_id']);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -39,61 +49,114 @@ class ProcessesScreen extends StatelessWidget {
                 stream: stream,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: Colors.purpleAccent));
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.purpleAccent),
+                    );
                   }
-                  if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No processes found"));
 
-                  final processesList = snapshot.data!;
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        "Error: ${snapshot.error}",
+                        style: TextStyle(color: primaryColor),
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Center(
+                      child: Text(
+                        "No processes found",
+                        style: TextStyle(color: primaryColor),
+                      ),
+                    );
+                  }
+
+                  final allProcesses = snapshot.data!;
+                  final filteredProcesses = allProcesses.where((process) {
+                    final processName = process['process_name']?.toString().toLowerCase() ?? "";
+
+                    if (widget.userRoles?.contains('admin') ?? false) {
+                      return true;
+                    }
+
+                    return widget.userRoles?.any(
+                          (role) => processName.contains(role.toString().toLowerCase()),
+                        ) ?? false;
+                  }).toList();
+
+                  if (filteredProcesses.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        "No authorized processes",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    );
+                  }
 
                   return ListView.builder(
-                    itemCount: processesList.length,
+                    itemCount: filteredProcesses.length,
                     itemBuilder: (context, index) {
-                      final process = processesList[index];
+                      final process = filteredProcesses[index];
                       final String processName = process['process_name']?.toString() ?? 'Unknown';
-                      final int safeId = int.tryParse(process['process_id'].toString()) ?? 0;
+                      final int processId = int.tryParse(process['process_id'].toString()) ?? 0;
 
                       return GestureDetector(
                         onTap: () {
-                          if (safeId != 0) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ProcessDetailScreen(
-                                  processId: safeId,
-                                  processName: processName,
+                          if (processId == 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Invalid process ID")),
+                            );
+                            return;
+                          }
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProcessDetailScreen(
+                                processId: processId,
+                                processName: processName,
+                                userRoles: widget.userRoles, 
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 15),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                          decoration: BoxDecoration(
+                            color: isDark 
+                                ? Colors.white.withOpacity(0.15) 
+                                : Colors.white.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.3)),
+                            boxShadow: isDark ? [] : [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  processName,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: GoogleFonts.balooBhai2(
+                                    fontSize: 20 * scale,
+                                    color: primaryColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                            );
-                          }
-                        },
-child: Container(
-  margin: const EdgeInsets.only(bottom: 15),
-  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-  decoration: BoxDecoration(
-    color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.6),
-    borderRadius: BorderRadius.circular(20),
-    border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-  ),
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Expanded( 
-        child: Text(
-          processName,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-          style: GoogleFonts.balooBhai2(
-            fontSize: 20 * scale,
-            color: primaryColor,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      Icon(Icons.arrow_forward_ios, color: primaryColor, size: 18),
-    ],
-  ),
-),
+                              Icon(Icons.arrow_forward_ios, color: primaryColor, size: 18),
+                            ],
+                          ),
+                        ),
                       );
                     },
                   );

@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/theme/theme_provider.dart';
 import '../screens/process_stats_screen.dart';
 
 class ProcessDetailScreen extends StatefulWidget {
   final int processId;
   final String processName;
+  final List<dynamic>? userRoles;
 
   const ProcessDetailScreen({
     super.key,
     required this.processId,
     required this.processName,
+    this.userRoles,
   });
 
   @override
@@ -22,8 +25,34 @@ class ProcessDetailScreen extends StatefulWidget {
 class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
   String filter = "All";
   String search = "";
+  String? currentUserEmployeeCode;
 
-  // 🔹 Real-time Stats Calculation
+  @override
+  void initState() {
+    super.initState();
+    _fetchCurrentUserCode(); 
+  }
+
+  Future<void> _fetchCurrentUserCode() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('employee_code')
+          .eq('id', user.id)
+          .single();
+
+      setState(() {
+        currentUserEmployeeCode = profile['employee_code'];
+      });
+    } catch (e) {
+      debugPrint("Profile fetch error: $e");
+    }
+  }
+
+  // 🔹 Aapka Real-time Stats Calculation
   Map<String, dynamic> _calculateStats(List<Map<String, dynamic>> jobs) {
     int total = jobs.length;
     int completed = jobs.where((j) => j['status'] == 'completed').length;
@@ -38,34 +67,48 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
     };
   }
 
-  // 🔹 Mark Completed Function
   Future<void> markAsCompleted(dynamic rowId) async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-      final profile = await Supabase.instance.client.from('profiles').select('employee_code').eq('id', user.id).single();
+      if (currentUserEmployeeCode == null) {
+        await _fetchCurrentUserCode();
+      }
+
       await Supabase.instance.client.from('job_processes').update({
         'status': 'completed',
-        'employee_code': profile['employee_code'],
+        'employee_code': currentUserEmployeeCode,
         'updated_at': DateTime.now().toIso8601String(),
         'end_time': DateTime.now().toIso8601String(),
       }).eq('id', rowId);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Job Completed!"), backgroundColor: Colors.green));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Job Completed!"), backgroundColor: Colors.green)
+        );
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)
+        );
+      }
     }
   }
 
-  // 🔹 Get Customer Details
   Future<Map<String, String>> _getExtraDetails(dynamic jobId, dynamic machineId) async {
-    String customer = "Loading...";
+    String customer = "Unknown";
+    String machine = "N/A";
     try {
       final jobData = await Supabase.instance.client.from('job_cards').select('customer_name').eq('job_id', jobId).maybeSingle();
       if (jobData != null) customer = jobData['customer_name'] ?? "Unknown";
+
+      if (machineId != null) {
+        final mach = await Supabase.instance.client.from('machines').select('name').eq('id', machineId).maybeSingle();
+        if (mach != null) machine = mach['name'] ?? "N/A";
+      }
     } catch (e) {
-      customer = "Unknown";
+      debugPrint("Extra details error: $e");
     }
-    return {'customer': customer};
+    return {'customer': customer, 'machine': machine};
   }
 
   @override
@@ -76,7 +119,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
 
     final Color primaryPurple = const Color(0xFF4A148C);
     final Color textColor = isDark ? Colors.white : primaryPurple;
-    final Color cardBg = isDark ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.7);
+    final Color cardBg = isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.7);
 
     final stream = Supabase.instance.client.from('job_processes').stream(primaryKey: ['id']).eq('process_id', widget.processId);
 
@@ -100,10 +143,19 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
               final stats = _calculateStats(allJobs);
 
               final filteredJobs = allJobs.where((j) {
-                final s = (j['status'] ?? 'pending').toString().toLowerCase();
-                final jId = (j['job_id'] ?? '').toString();
-                bool matchesFilter = (filter == "All") || (filter == "Pending" && s == "pending") || (filter == "Completed" && s == "completed");
-                return matchesFilter && jId.contains(search);
+                final status = (j['status'] ?? 'pending').toString().toLowerCase();
+                final jobId = (j['job_id'] ?? '').toString();
+                final empCode = j['employee_code']?.toString();
+
+                final isAdmin = widget.userRoles?.contains('admin') ?? false;
+                final isMine = empCode != null && empCode == currentUserEmployeeCode;
+                final isUnassigned = empCode == null || empCode.isEmpty;
+
+                final roleAllowed = isAdmin || isMine || (isUnassigned && status == 'pending');
+                
+                bool matchesFilter = (filter == "All") || (filter == "Pending" && status == "pending") || (filter == "Completed" && status == "completed");
+                
+                return roleAllowed && matchesFilter && jobId.contains(search);
               }).toList();
 
               return Column(
@@ -148,7 +200,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.2))),
+        decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.2))),
         child: Column(
           children: [
             Row(
@@ -222,7 +274,7 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
                   selectedColor: const Color(0xFF673AB7),
                   labelStyle: TextStyle(color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87)),
                   backgroundColor: cardBg,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.white.withOpacity(0.1))),
                 ),
               );
             }).toList(),
@@ -234,13 +286,15 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
 
   Widget _buildJobCard(Map<String, dynamic> job, bool isDark, double scale, Color purple, Color cardBg) {
     final status = (job['status'] ?? 'pending').toString().toLowerCase();
+    final isPrinting = widget.processName.toLowerCase().contains("printing");
+
     return FutureBuilder<Map<String, String>>(
       future: _getExtraDetails(job['job_id'], job['machine_id']),
-      builder: (context, details) {
+      builder: (context, snap) {
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-          decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.white.withValues(alpha: 0.2))),
+          decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.white.withOpacity(0.2))),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -251,7 +305,10 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
                   _statusBadge(status, isDark),
                 ],
               ),
-              Text("Customer: ${details.data?['customer'] ?? '...'}", style: TextStyle(color: purple.withValues(alpha: 0.8), fontSize: 12 * scale, fontWeight: FontWeight.w500)),
+              Text("Customer: ${snap.data?['customer'] ?? '...'}", style: TextStyle(color: purple.withOpacity(0.8), fontSize: 12 * scale, fontWeight: FontWeight.w500)),
+              if (isPrinting)
+                Text("Machine: ${snap.data?['machine'] ?? 'N/A'}", style: TextStyle(color: purple.withOpacity(0.7), fontSize: 11 * scale)),
+              
               if (status == 'pending') ...[
                 const SizedBox(height: 10),
                 SizedBox(
@@ -273,12 +330,12 @@ class _ProcessDetailScreenState extends State<ProcessDetailScreen> {
 
   Widget _statusBadge(String status, bool isDark) {
     bool isDone = status == "completed";
-    Color bgColor = isDone ? Colors.green.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.2);
+    Color bgColor = isDone ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2);
     Color txtColor = isDone ? (isDark ? Colors.greenAccent : Colors.green[800]!) : (isDark ? Colors.orangeAccent : Colors.orange[900]!);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6), border: Border.all(color: txtColor.withValues(alpha: 0.3))),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6), border: Border.all(color: txtColor.withOpacity(0.3))),
       child: Text(status.toUpperCase(), style: TextStyle(color: txtColor, fontSize: 9, fontWeight: FontWeight.bold)),
     );
   }
