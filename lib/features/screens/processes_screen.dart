@@ -18,13 +18,13 @@ class ProcessesScreen extends StatelessWidget {
     final stream = Supabase.instance.client.from('processes').stream(primaryKey: ['process_id']);
 
     return Scaffold(
-      backgroundColor: Colors.transparent, 
+      backgroundColor: Colors.transparent,
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 40), 
+            const SizedBox(height: 40),
             Text(
               "Select Process",
               style: GoogleFonts.balooBhai2(
@@ -34,7 +34,6 @@ class ProcessesScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: stream,
@@ -42,12 +41,8 @@ class ProcessesScreen extends StatelessWidget {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator(color: Colors.purpleAccent));
                   }
-                  if (snapshot.hasError) {
-                    return Center(child: Text("Error: ${snapshot.error}", style: TextStyle(color: primaryColor)));
-                  }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Center(child: Text("No processes found", style: TextStyle(color: primaryColor)));
-                  }
+                  if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No processes found"));
 
                   final processesList = snapshot.data!;
 
@@ -70,36 +65,35 @@ class ProcessesScreen extends StatelessWidget {
                                 ),
                               ),
                             );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Error: Process ID not found"))
-                            );
                           }
                         },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 15),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withOpacity(0.3)),
-                            boxShadow: isDark ? [] : [BoxShadow(color: Colors.black12, blurRadius: 10)],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                processName,
-                                style: GoogleFonts.balooBhai2(
-                                  fontSize: 20 * scale,
-                                  color: primaryColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Icon(Icons.arrow_forward_ios, color: primaryColor, size: 18),
-                            ],
-                          ),
-                        ),
+child: Container(
+  margin: const EdgeInsets.only(bottom: 15),
+  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+  decoration: BoxDecoration(
+    color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.6),
+    borderRadius: BorderRadius.circular(20),
+    border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+  ),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Expanded( 
+        child: Text(
+          processName,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          style: GoogleFonts.balooBhai2(
+            fontSize: 20 * scale,
+            color: primaryColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      Icon(Icons.arrow_forward_ios, color: primaryColor, size: 18),
+    ],
+  ),
+),
                       );
                     },
                   );
